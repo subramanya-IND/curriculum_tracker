@@ -9,11 +9,15 @@ main { max-width: 950px; margin: 32px auto; background: #fff; border-radius: 12p
 #summary > div { background: #fafafa; border-radius: 8px; padding: 1em 1.5em; min-width: 100px; box-shadow: 0 2px 6px rgba(230,129,97,0.05); }
 #tabs { margin: 1em 0; display: flex; gap: 10px; }
 #tabs button { padding: 8px 16px; border: none; border-radius: 8px; background: #ffe066; color: #e94f37; font-weight: 600; cursor: pointer; }
+#tabs button.active { background: #e94f37; color: #fff; }
 #dashboard { margin: 2em 0; }
 canvas { margin: 20px 0; max-width: 100% !important; }
 #dataTable { margin-top: 18px; overflow-x:auto; }
 button { background: #e94f37; color: #fff; border: none; border-radius: 8px; padding: 8px 18px; margin-top: 16px; cursor: pointer; }
 button:active { background: #d23010; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 8px 12px; border: 1px solid #ddd; text-align: left; }
+th { background-color: #ffe066; color: #e94f37; cursor: pointer; }
 @media(max-width:600px){
   main { padding: 1em; }
   #summary { flex-direction: column; }
