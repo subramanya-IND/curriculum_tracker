@@ -1,142 +1,264 @@
-// Config for Google Sheets
-const GOOGLE_SHEET_ID = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGnB1eDtUbSC4vxxAdi-VVeIxB7nfKG09Z0cwxYDp4x3BupYFaYR1LVhtD8lKwziPz-ZBZ_M_FTnAP/pub?gid=1480991967&single=true&output=csv'; // e.g. "1sDFj...U0"
-const GOOGLE_API_KEY = 'YOUR_API_KEY_HERE';
-const SHEET_NAME = 'Import';
+// Update the following with your sheet details:
+const GOOGLE_SHEET_ID = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRGnB1eDtUbSC4vxxAdi-VVeIxB7nfKG09Z0cwxYDp4x3BupYFaYR1LVhtD8lKwziPz-ZBZ_M_FTnAP/pub?gid=1480991967&single=true&output=csv';
+const SHEET_GID = '0'; // default sheet tab gid, change if needed
 
-// Helper to fetch Google Sheets
-async function fetchSheet() {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEET_ID}/values/${SHEET_NAME}?key=${GOOGLE_API_KEY}`;
+async function fetchCSV() {
+  const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
   const response = await fetch(url);
-  if(!response.ok) throw new Error('Failed to load data');
-  const { values } = await response.json();
-  return values;
+  if(!response.ok) throw new Error('Failed to fetch Google Sheet CSV');
+  return await response.text();
 }
 
-// Parse rows to objects
-function sheetToObjects(rows) {
-  const [header,...data] = rows;
-  return data.map(row=>{
-    const obj={}; header.forEach((h,i)=>{obj[h]=row[i]||'';}); return obj;
+function csvToArray(str, delimiter = ',') {
+  // Simple CSV to array parser
+  const rows = str.trim().split('\n');
+  return rows.map(row => row.split(delimiter).map(cell => cell.trim()));
+}
+
+function rowsToObjects(rows) {
+  const headers = rows[0];
+  return rows.slice(1).map(row => {
+    let obj = {};
+    headers.forEach((h, i) => obj[h] = row[i] || '');
+    return obj;
   });
 }
 
-// Main Dashboard Logic
-async function loadDashboard(){
-  document.getElementById('loading').style.display='block';
-  document.getElementById('error-message').style.display='none';
-  try {
-    const rows = await fetchSheet();
-    const data = sheetToObjects(rows);
-    renderFilters(data);
-    renderSummary(data);
-    renderDashboard(data);
-    document.getElementById('loading').style.display='none';
-  } catch(err){
-    document.getElementById('loading').style.display='none';
-    document.getElementById('error-message').style.display='block';
-    document.getElementById('error-message').textContent='Error: '+err.message;
-  }
-}
+let currentTab = 'classes';
 
-// Render filter dropdowns
-function renderFilters(data){
-  const schools = [...new Set(data.map(d=>d.batch_or_school_name).filter(s=>s))].sort();
-  const subjects = [...new Set(data.map(d=>d.subject).filter(s=>s))].sort();
-  const months = [...new Set(data.map(d=>d.session_date.substring(0,7)).filter(m=>m))].sort();
-
-  let schoolFilter = document.getElementById('schoolFilter');
-  schoolFilter.innerHTML = '<option value="">All Schools</option>' + schools.map(s=>`<option>${s}</option>`).join('');
-  let subjectFilter = document.getElementById('subjectFilter');
-  subjectFilter.innerHTML = '<option value="">All Subjects</option>' + subjects.map(s=>`<option>${s}</option>`).join('');
-  let monthFilter = document.getElementById('monthFilter');
-  monthFilter.innerHTML = '<option value="">All Months</option>' + months.map(m=>`<option>${m}</option>`).join('');
-
-  // Add event listeners for filtering
-  document.getElementById('schoolFilter').onchange = () => filterDashboard(data);
-  document.getElementById('subjectFilter').onchange = () => filterDashboard(data);
-  document.getElementById('monthFilter').onchange = () => filterDashboard(data);
-  document.getElementById('clearFilters').onclick = () => {schoolFilter.value = ''; subjectFilter.value = ''; monthFilter.value = ''; filterDashboard(data);}
-}
-
-// Filter logic
-function filterDashboard(data){
-  let s = document.getElementById('schoolFilter').value;
-  let sub = document.getElementById('subjectFilter').value;
-  let m = document.getElementById('monthFilter').value;
-  let filtered = data.filter(d=>{
-    return (!s||d.batch_or_school_name===s)
-      && (!sub||d.subject===sub)
-      && (!m||d.session_date.substring(0,7)===m);
+function initTabs() {
+  const tabs = document.querySelectorAll('#tabs button');
+  tabs.forEach(tab => {
+    tab.onclick = () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTab = tab.dataset.tab;
+      if(window.data) renderDashboard(window.data);
+    };
   });
-  renderSummary(filtered);
-  renderDashboard(filtered);
 }
 
-// Summary Cards
-function renderSummary(data){
-  let schools = [...new Set(data.map(d=>d.batch_or_school_name).filter(s=>s))];
-  let subjects = [...new Set(data.map(d=>d.subject).filter(s=>s))];
-  let classesDone = data.filter(d=>d.session_type=='Class' && d.chapter_status=='Completed').length;
-  let classesTotal = data.filter(d=>d.session_type=='Class').length;
-  let testsDone = data.filter(d=>d.session_type=='Test' && d.chapter_status=='Completed').length;
-  let testsTotal = data.filter(d=>d.session_type=='Test').length;
-  document.getElementById('statSchools').textContent = `Schools: ${schools.length}`;
-  document.getElementById('statSubjects').textContent = `Subjects: ${subjects.length}`;
+function applyFilters(data) {
+  const school = document.getElementById('schoolFilter').value;
+  const subject = document.getElementById('subjectFilter').value;
+  const month = document.getElementById('monthFilter').value;
+
+  return data.filter(d => {
+    let cond = true;
+    if(school) cond = cond && (d.batch_or_school_name === school);
+    if(subject) cond = cond && (d.subject === subject);
+    if(month) cond = cond && d.session_date.startsWith(month);
+    return cond;
+  });
+}
+
+function populateFilterOptions(data) {
+  const schools = [...new Set(data.map(d => d.batch_or_school_name).filter(Boolean))].sort();
+  const subjects = [...new Set(data.map(d => d.subject).filter(Boolean))].sort();
+  const months = [...new Set(data.map(d => d.session_date.substring(0,7)).filter(Boolean))].sort();
+
+  const schoolSelect = document.getElementById('schoolFilter');
+  const subjectSelect = document.getElementById('subjectFilter');
+  const monthSelect = document.getElementById('monthFilter');
+
+  schoolSelect.innerHTML = `<option value="">All Schools</option>${schools.map(s => `<option>${s}</option>`).join('')}`;
+  subjectSelect.innerHTML = `<option value="">All Subjects</option>${subjects.map(s => `<option>${s}</option>`).join('')}`;
+  monthSelect.innerHTML = `<option value="">All Months</option>${months.map(m => `<option>${m}</option>`).join('')}`;
+
+  schoolSelect.onchange = () => renderDashboard(window.data);
+  subjectSelect.onchange = () => renderDashboard(window.data);
+  monthSelect.onchange = () => renderDashboard(window.data);
+
+  document.getElementById('clearFilters').onclick = () => {
+    schoolSelect.value = '';
+    subjectSelect.value = '';
+    monthSelect.value = '';
+    renderDashboard(window.data);
+  };
+}
+
+function summarize(data) {
+  const schools = new Set(data.map(d=>d.batch_or_school_name).filter(Boolean));
+  const subjects = new Set(data.map(d=>d.subject).filter(Boolean));
+  const classesDone = data.filter(d=>d.session_type==='Class' && d.chapter_status==='Completed').length;
+  const classesTotal = data.filter(d=>d.session_type==='Class').length;
+  const testsDone = data.filter(d=>d.session_type==='Test' && d.chapter_status==='Completed').length;
+  const testsTotal = data.filter(d=>d.session_type==='Test').length;
+
+  document.getElementById('statSchools').textContent = `Schools: ${schools.size}`;
+  document.getElementById('statSubjects').textContent = `Subjects: ${subjects.size}`;
   document.getElementById('statCompletion').textContent =
-    `Classes: ${classesDone}/${classesTotal} (${((classesDone/classesTotal)*100||0).toFixed(1)}%) | Tests: ${testsDone}/${testsTotal} (${((testsDone/testsTotal)*100||0).toFixed(1)}%)`;
+    `Classes: ${classesDone} / ${classesTotal} (${(classesTotal ? (classesDone/classesTotal*100).toFixed(1) : 0)}%) | ` +
+    `Tests: ${testsDone} / ${testsTotal} (${(testsTotal ? (testsDone/testsTotal*100).toFixed(1) : 0)}%)`;
 }
 
-// Dashboard Charts and Table
-function renderDashboard(data){
-  // Prepare data
-  let bySchool = {}; let bySubject = {}; let byMonth = {};
-  data.forEach(d=>{
-    // Progress per school/subject
-    let key1 = d.batch_or_school_name+'_'+d.subject;
-    bySchool[key1] = bySchool[key1]||{total:0,done:0,subject:d.subject,school:d.batch_or_school_name};
-    if(d.session_type=='Class'){bySchool[key1].total++;}
-    if(d.session_type=='Class'&&d.chapter_status=='Completed'){bySchool[key1].done++;}
-    // Progress per month
-    let mkey=d.session_date.substring(0,7)+'_'+d.subject;
-    byMonth[mkey]=byMonth[mkey]||{total:0,done:0,month:d.session_date.substring(0,7),subject:d.subject};
-    if(d.session_type=='Class'){byMonth[mkey].total++;}
-    if(d.session_type=='Class'&&d.chapter_status=='Completed'){byMonth[mkey].done++;}
+function renderDashboard(data) {
+  const filteredData = applyFilters(data);
+
+  summarize(filteredData);
+
+  if(currentTab==='classes') {
+    renderProgressChart(filteredData.filter(d => d.session_type==='Class'));
+  } else if(currentTab==='tests') {
+    renderProgressChart(filteredData.filter(d => d.session_type==='Test'));
+  } else {
+    renderMonthlyTrend(filteredData);
+  }
+
+  renderTable(filteredData);
+}
+
+let chartInstance = null;
+
+function renderProgressChart(data) {
+  // Group by school-subject and completion rate
+  let grouped = {};
+  data.forEach(d => {
+    const key = `${d.batch_or_school_name}|${d.subject}`;
+    if(!grouped[key]) grouped[key] = {total:0, completed:0, school:d.batch_or_school_name, subject:d.subject};
+    grouped[key].total++;
+    if(d.chapter_status==='Completed') grouped[key].completed++;
   });
 
-  let labels=Object.values(bySchool).map(d=>(d.school+'-'+d.subject));
-  let classTotals = Object.values(bySchool).map(d=>d.total);
-  let classDone = Object.values(bySchool).map(d=>d.done);
+  const labels = [];
+  const totalCounts = [];
+  const completedCounts = [];
 
-  // Chart.js progress chart
-  let ctx=document.getElementById('progressChart').getContext('2d');
-  if(window.progressChart){window.progressChart.destroy();}
-  window.progressChart=new Chart(ctx,{
-    type:'bar',
-    data:{labels:labels,datasets:[
-      {label:'Total',data:classTotals,backgroundColor:'#ffe066'},
-      {label:'Completed',data:classDone,backgroundColor:'#e94f37'}
-    ]},
-    options:{responsive:true,plugins:{legend:{position:'top'}}}
+  Object.values(grouped).forEach(g => {
+    labels.push(`${g.school} - ${g.subject}`);
+    totalCounts.push(g.total);
+    completedCounts.push(g.completed);
   });
 
-  // Table
-  let tableHTML = `<table><tr><th>School</th><th>Subject</th><th>Classes Done</th><th>Total Classes</th></tr>`;
-  Object.values(bySchool).forEach(d=>{
-    tableHTML += `<tr><td>${d.school}</td><td>${d.subject}</td><td>${d.done}</td><td>${d.total}</td></tr>`;
-  });
-  tableHTML += `</table>`;
-  document.getElementById('dataTable').innerHTML=tableHTML;
+  const ctx = document.getElementById('progressChart').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
 
-  // Export feature
-  document.getElementById('exportCSV').onclick = ()=>{
-    let csv = 'School,Subject,Classes_Done,Classes_Total\n'+Object.values(bySchool)
-      .map(d=>`${d.school},${d.subject},${d.done},${d.total}`).join('\n');
-    let blob = new Blob([csv],{type:'text/csv'});
-    let a=document.createElement('a');
-    a.href=URL.createObjectURL(blob); a.download='curriculum_tracker.csv';
-    a.click();
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {label:'Total Sessions', data: totalCounts, backgroundColor: '#ffe066'},
+        {label:'Completed Sessions', data: completedCounts, backgroundColor: '#e94f37'}
+      ]
+    },
+    options: {
+      responsive:true,
+      plugins: {legend: {position: 'top'}},
+      scales: {
+        y: {beginAtZero: true, precision: 0 }
+      }
+    }
+  });
+}
+
+function renderMonthlyTrend(data) {
+  // Group by month and subject for classes only
+  let grouped = {};
+  data.filter(d=>d.session_type==='Class').forEach(d => {
+    const key = `${d.session_date.substring(0,7)}|${d.subject}`;
+    if(!grouped[key]) grouped[key] = {total:0, completed:0, month:d.session_date.substring(0,7), subject:d.subject};
+    grouped[key].total++;
+    if(d.chapter_status==='Completed') grouped[key].completed++;
+  });
+
+  const months = [...new Set(data.map(d => d.session_date.substring(0,7)))].sort();
+  const subjects = [...new Set(data.map(d => d.subject))].filter(Boolean).sort();
+
+  const datasets = subjects.map((subject, idx) => {
+    const dataPoints = months.map(month => {
+      const key = `${month}|${subject}`;
+      const g = grouped[key];
+      return g ? (g.completed / g.total) * 100 : 0;
+    });
+    const colors = ['#e94f37','#ffe066','#e08f55','#f7b733'];
+    return {
+      label: subject,
+      data: dataPoints,
+      borderColor: colors[idx % colors.length],
+      fill: false,
+      tension: 0.1
+    };
+  });
+
+  const ctx = document.getElementById('progressChart').getContext('2d');
+  if(chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: months,
+      datasets
+    },
+    options: {
+      responsive:true,
+      plugins: {legend: {position: 'top'}},
+      scales: {
+        y: {beginAtZero: true, max: 100, title: {display: true, text: 'Completion %'} }
+      }
+    }
+  });
+}
+
+function renderTable(data) {
+  let html = `<table>
+    <thead>
+      <tr><th>School</th><th>Subject</th><th>Session Type</th><th>Chapter Status</th><th>Session Date</th></tr>
+    </thead><tbody>`;
+
+  data.forEach(d => {
+    html += `<tr>
+      <td>${d.batch_or_school_name}</td>
+      <td>${d.subject}</td>
+      <td>${d.session_type}</td>
+      <td>${d.chapter_status}</td>
+      <td>${d.session_date}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>`;
+  document.getElementById('dataTable').innerHTML = html;
+}
+
+function downloadCSV(data) {
+  const headers = ['batch_or_school_name','subject','session_type','chapter_status','session_date'];
+  const csvRows = [headers.join(',')];
+  data.forEach(d => {
+    const row = headers.map(h => `"${(d[h] || '').replace(/"/g,'""')}"`).join(',');
+    csvRows.push(row);
+  });
+  return csvRows.join('\n');
+}
+
+document.getElementById('exportCSV').addEventListener('click', () => {
+  if(!window.data) return alert('Data not loaded yet.');
+  const filteredData = applyFilters(window.data);
+  const csv = downloadCSV(filteredData);
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'curriculum_tracking.csv';
+  a.click();
+});
+
+async function init() {
+  document.getElementById('loading').style.display = 'block';
+  try {
+    const csvText = await fetchCSV();
+    let rows = csvToArray(csvText);
+    let parsedData = rowsToObjects(rows);
+    // Clean up subject spelling consistency (Maths -> Mathematics)
+    parsedData.forEach(d => {
+      if(d.subject && d.subject.toLowerCase()=='maths') d.subject = 'Mathematics';
+    });
+    window.data = parsedData;
+    populateFilterOptions(parsedData);
+    renderDashboard(parsedData);
+    initTabs();
+    document.getElementById('loading').style.display = 'none';
+  } catch(err) {
+    document.getElementById('error-message').textContent = 'Error loading data: ' + err.message;
+    document.getElementById('error-message').style.display = 'block';
+    document.getElementById('loading').style.display = 'none';
   }
 }
 
-// Start
-window.onload = loadDashboard;
+window.onload = init;
