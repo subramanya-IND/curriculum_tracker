@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Curriculum & Test Tracking Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
@@ -16,6 +16,7 @@
     <h1>Curriculum & Test Tracking Dashboard</h1>
     <p id="date-range"></p>
   </header>
+
   <main>
     <section id="filters">
       <select id="schoolFilter"><option value="">All Schools</option></select>
@@ -23,26 +24,29 @@
       <select id="monthFilter"><option value="">All Months</option></select>
       <button id="clearFilters">Clear All</button>
     </section>
+
     <section id="summary">
       <div id="statSchools"></div>
       <div id="statSubjects"></div>
       <div id="statCompletion"></div>
     </section>
+
     <section id="tabs">
-      <button data-tab="classes">Classes</button>
+      <button data-tab="classes" class="active">Classes</button>
       <button data-tab="tests">Tests</button>
       <button data-tab="month">Monthly Progress</button>
     </section>
+
     <section id="dashboard">
       <canvas id="progressChart"></canvas>
-      <canvas id="compareChart"></canvas>
-      <canvas id="trendChart"></canvas>
       <div id="dataTable"></div>
       <button id="exportCSV">Download CSV</button>
     </section>
-    <div id="loading" style="display:none;">Loading data from Google Sheets...</div>
+
+    <div id="loading" style="display:none;">Loading data from Google Sheets CSV...</div>
     <div id="error-message" style="display:none;"></div>
   </main>
+
   <script src="app.js"></script>
 </body>
 </html>
